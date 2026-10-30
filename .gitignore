@@ -1,0 +1,22 @@
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Variables de entorno
+.env
+
+# Archivos de volcado y logs de base de datos
+*.dmp
+*.log
+
+# IDEs
+.vs/
+.vscode/
+.idea/
