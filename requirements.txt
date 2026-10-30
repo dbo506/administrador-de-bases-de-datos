@@ -1,0 +1,4 @@
+oracledb
+streamlit
+pandas
+plotly
