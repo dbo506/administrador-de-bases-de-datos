@@ -1,0 +1,4 @@
+[client]
+# "minimal" oculta Deploy, Rerun, Clear cache, Print, Record y About.
+# En el menú ⋮ solo queda el selector de tema (System / Light / Dark).
+toolbarMode = "minimal"
