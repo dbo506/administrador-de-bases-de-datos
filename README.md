@@ -1,89 +1,39 @@
-# Administrador de Bases de Datos Oracle 21c XE
+# Administrador de Bases de Datos Oracle
 
-Proyecto final del curso **EIF-402 Administración de Bases de Datos**, Universidad Nacional (UNA), Sede Interuniversitaria de Alajuela.
-Docente: MAP. Rodolfo Sánchez Sánchez.
+Aplicación web hecha con **Python** y **Streamlit** para administrar una base de datos **Oracle 21c XE** desde una interfaz gráfica.
 
-Aplicación web (Python + Streamlit) para administrar Oracle 21c XE y ejecutar respaldos con Data Pump.
+## Partes del sistema
 
-**Entrega y demo:** 4 de noviembre de 2026 (semana 15, en el laboratorio).
+- **Inicio y conexión:** permite conectarse a Oracle y muestra información general de la instancia.
+- **Tablespaces y datafiles:** consulta el espacio utilizado y permite crear, modificar y eliminar tablespaces y administrar sus archivos de datos.
+- **Tuning de consultas:** permite revisar planes de ejecución, gestionar estadísticas y administrar índices para apoyar el análisis y ajuste de consultas.
+- **Rendimiento y salud:** muestra métricas de memoria y actividad, sesiones, bloqueos y consultas SQL de mayor costo.
+- **Auditoría:** permite consultar registros e intentos fallidos de inicio de sesión, además de administrar políticas de auditoría.
+- **Seguridad y usuarios:** permite administrar cuentas, perfiles, roles y privilegios de Oracle.
+- **Respaldos y restauración:** crea y restaura respaldos por esquema, tabla o de la base de datos completa mediante Oracle Data Pump.
+- **Directorios y archivos:** administra directorios de Oracle y permite explorar archivos de respaldo y registros.
 
----
+## Cómo correrlo
 
-## Estado del proyecto
+### Requisitos
 
-Última actualización: 1 de noviembre de 2026.
-
-| Requisito del enunciado | Estado | Módulo |
-|---|---|---|
-| Administración de tablespaces | ✅ Implementado | `modules/tablespaces.py` |
-| Tuning de consultas (planes, estadísticas, índices) | ✅ Implementado | `modules/tuning.py` |
-| Performance de la base de datos | ✅ Implementado | `modules/performance.py` |
-| Auditoría de la BD | ✅ Implementado | `modules/auditing.py` |
-| Seguridad de usuarios | ✅ Implementado | `modules/security.py` |
-| Respaldos por Schemas / Tablas / Full | ✅ Implementado | `modules/backup_restore.py` |
-| Recuperación de respaldos | ✅ Implementado | `modules/backup_restore.py` |
-| Administración de archivos de respaldo y directorios | ✅ Implementado | `modules/directories.py` |
-| Manual de usuario (máx. 4 páginas) | ⚠️ Borrador en Markdown | `docs/manual_de_usuario.md` |
-
-### Pendiente antes de la entrega
-
-- [ ] Probar cada módulo contra Oracle 21c XE real (funcionalidad = 70% de la nota).
-- [ ] Confirmar que `expdp` e `impdp` están en el `PATH` de la máquina del laboratorio.
-- [ ] Verificar los privilegios de auditoría (`AUDIT_VIEWER` / `AUDIT_ADMIN`) del usuario que se usará en la demo.
-- [ ] Pasar el manual a PDF, con capturas de pantalla, en 4 páginas como máximo.
-- [ ] Corregir en el manual: dice `DBA_TAB_STATISTICS`, pero el código usa `ALL_TAB_STATISTICS`.
-
-### Cambios recientes
-
-- Los mensajes de éxito ahora se ven después de cada acción (antes `st.rerun()` los borraba). Ver `flash()` en `modules/common.py`.
-- La restauración (impdp) por esquemas y por tablas ahora genera `SCHEMAS=` / `TABLES=` (antes solo funcionaba Full).
-- Corregido el cálculo del espacio libre en tablespaces temporales.
-- Al crear un índice, las columnas se actualizan al cambiar de tabla.
-- Barra de herramientas de Streamlit en modo mínimo (`.streamlit/config.toml`).
-
----
-
-## Funcionalidades por módulo
-
-- **💾 Tablespaces y Datafiles:** monitoreo de uso con gráficos; crear tablespaces (permanent, temporary, undo); cambiar estado (online/offline) y modo (read only/write); agregar y redimensionar datafiles; eliminar con confirmación.
-- **⚡ Tuning:** Explain Plan con `DBMS_XPLAN`; ver y recolectar estadísticas con `DBMS_STATS` (por tabla o por esquema); listar, crear (B-Tree, Unique, Bitmap), reconstruir y eliminar índices.
-- **📊 Performance:** memoria SGA/PGA, hit ratios, sesiones con opción de kill, bloqueos y Top SQL.
-- **🛡️ Auditoría:** consulta de `UNIFIED_AUDIT_TRAIL` con filtros, logins fallidos, crear, deshabilitar y eliminar políticas de auditoría.
-- **👥 Seguridad:** crear, modificar, bloquear/desbloquear y eliminar usuarios; otorgar y revocar roles y privilegios; modificar perfiles.
-- **📦 Respaldos y Restauración:** `expdp` por esquemas, tablas o full; `impdp` con `TABLE_EXISTS_ACTION`, `REMAP_SCHEMA` y `REMAP_TABLESPACE`.
-- **📁 Directorios y Archivos:** crear y eliminar objetos `DIRECTORY`; explorar archivos, ver logs, descargar y borrar respaldos.
-
----
-
-## Requisitos
-
-- Oracle Database 21c Express Edition en ejecución (servicio `XEPDB1` o `XE`).
 - Python 3.10 o superior.
-- `expdp` y `impdp` accesibles en el `PATH` (para el módulo de respaldos).
+- Oracle 21c XE en ejecución.
+- `expdp` e `impdp` disponibles en el `PATH` para utilizar respaldos y restauraciones.
 
-## Instalación y ejecución
+### Pasos
 
-```powershell
-pip install -r requirements.txt
-streamlit run app.py
-```
+1. Abre una terminal en la carpeta del proyecto.
+2. Instala las dependencias:
 
-La aplicación abre en `http://localhost:8501`. Conectarse con `SYSTEM` (o con `SYS` marcando "Conectar como SYSDBA").
+   ```powershell
+   pip install -r requirements.txt
+   ```
 
-## Estructura
+3. Ejecuta la aplicación:
 
-```
-app.py                  # Login, menú lateral y pantalla de inicio
-db_connection.py        # Conexión a Oracle (oracledb)
-modules/
-  common.py             # Ejecución de consultas y mensajes (flash)
-  tablespaces.py
-  tuning.py
-  performance.py
-  auditing.py
-  security.py
-  backup_restore.py
-  directories.py
-docs/manual_de_usuario.md
-.streamlit/config.toml
-```
+   ```powershell
+   streamlit run app.py
+   ```
+
+4. Abre [http://localhost:8501](http://localhost:8501) en el navegador e inicia sesión con tus credenciales de Oracle.
