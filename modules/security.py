@@ -9,7 +9,7 @@ Incluye:
 import streamlit as st
 import pandas as pd
 import oracledb
-from modules.common import run_query, run_dml
+from modules.common import run_query, run_dml, flash
 
 
 def get_users_list(conn: oracledb.Connection, only_open: bool = False) -> pd.DataFrame:
@@ -192,8 +192,7 @@ def render_security(conn: oracledb.Connection):
                         if grant_resource:
                             run_dml(conn, f"GRANT RESOURCE TO {new_username}")
 
-                    st.success(f"¡Usuario **{new_username}** creado exitosamente!")
-                    st.code(ddl_user, language="sql")
+                    flash(f"¡Usuario **{new_username}** creado exitosamente!", code=ddl_user)
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al crear usuario: {e}")
@@ -238,7 +237,7 @@ def render_security(conn: oracledb.Connection):
                     if st.button("🔓 Desbloquear Cuenta", use_container_width=True):
                         try:
                             run_dml(conn, f"ALTER USER {selected_u} ACCOUNT UNLOCK")
-                            st.success(f"Cuenta {selected_u} desbloqueada.")
+                            flash(f"Cuenta {selected_u} desbloqueada.")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error: {e}")
@@ -246,7 +245,7 @@ def render_security(conn: oracledb.Connection):
                     if st.button("🔒 Bloquear Cuenta", use_container_width=True):
                         try:
                             run_dml(conn, f"ALTER USER {selected_u} ACCOUNT LOCK")
-                            st.warning(f"Cuenta {selected_u} bloqueada.")
+                            flash(f"Cuenta {selected_u} bloqueada.", "warning")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error: {e}")
@@ -266,7 +265,7 @@ def render_security(conn: oracledb.Connection):
                             if cascade_drop:
                                 ddl_drop_u += " CASCADE"
                             run_dml(conn, ddl_drop_u)
-                            st.success(f"Usuario {selected_u} eliminado correctamente.")
+                            flash(f"Usuario {selected_u} eliminado correctamente.")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al eliminar usuario: {e}")
@@ -297,7 +296,7 @@ def render_security(conn: oracledb.Connection):
                         if with_admin:
                             sql_gr += " WITH ADMIN OPTION"
                         run_dml(conn, sql_gr)
-                        st.success(f"Rol {sel_role_to_grant} otorgado a {target_user_privs}.")
+                        flash(f"Rol {sel_role_to_grant} otorgado a {target_user_privs}.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al otorgar rol: {e}")
@@ -309,7 +308,7 @@ def render_security(conn: oracledb.Connection):
                     if st.button("Revocar Rol", type="primary"):
                         try:
                             run_dml(conn, f"REVOKE {role_to_revoke} FROM {target_user_privs}")
-                            st.success(f"Rol {role_to_revoke} revocado.")
+                            flash(f"Rol {role_to_revoke} revocado.")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al revocar rol: {e}")
@@ -330,7 +329,7 @@ def render_security(conn: oracledb.Connection):
                 if st.button("Conceder Privilegio"):
                     try:
                         run_dml(conn, f"GRANT {sel_sys_priv} TO {target_user_privs}")
-                        st.success(f"Privilegio {sel_sys_priv} concedido a {target_user_privs}.")
+                        flash(f"Privilegio {sel_sys_priv} concedido a {target_user_privs}.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al conceder privilegio: {e}")
@@ -368,7 +367,7 @@ def render_security(conn: oracledb.Connection):
                 try:
                     stmt_prof = f"ALTER PROFILE {prof_name_alt} LIMIT {prof_param} {prof_val}"
                     run_dml(conn, stmt_prof)
-                    st.success(f"Parámetro {prof_param} del perfil {prof_name_alt} cambiado a {prof_val}.")
+                    flash(f"Parámetro {prof_param} del perfil {prof_name_alt} cambiado a {prof_val}.")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al modificar perfil: {e}")

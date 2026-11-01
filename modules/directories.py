@@ -12,7 +12,7 @@ import datetime
 import streamlit as st
 import pandas as pd
 import oracledb
-from modules.common import run_query, run_dml
+from modules.common import run_query, run_dml, flash
 
 
 def get_oracle_directories(conn: oracledb.Connection) -> pd.DataFrame:
@@ -144,7 +144,7 @@ def render_directories(conn: oracledb.Connection):
                     if st.button(f"🗑️ Eliminar {sel_file_action}", type="primary", use_container_width=True):
                         try:
                             os.remove(target_file_path)
-                            st.success(f"Archivo {sel_file_action} eliminado con éxito.")
+                            flash(f"Archivo {sel_file_action} eliminado con éxito.")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al eliminar archivo: {e}")
@@ -182,7 +182,7 @@ def render_directories(conn: oracledb.Connection):
                         if grant_public:
                             run_dml(conn, f"GRANT READ, WRITE ON DIRECTORY {new_dir_name} TO PUBLIC")
 
-                        st.success(f"Directorio **{new_dir_name}** creado exitosamente.")
+                        flash(f"Directorio **{new_dir_name}** creado exitosamente.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al crear directorio: {e}")
@@ -198,7 +198,7 @@ def render_directories(conn: oracledb.Connection):
             if btn_drop_d and sel_drop_dir and sel_drop_dir != "(Ninguno disponible)":
                 try:
                     run_dml(conn, f"DROP DIRECTORY {sel_drop_dir}")
-                    st.success(f"Directorio {sel_drop_dir} eliminado de Oracle.")
+                    flash(f"Directorio {sel_drop_dir} eliminado de Oracle.")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al eliminar directorio: {e}")

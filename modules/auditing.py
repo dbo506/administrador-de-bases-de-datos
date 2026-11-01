@@ -10,7 +10,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import oracledb
-from modules.common import run_query, run_dml
+from modules.common import run_query, run_dml, flash
 
 
 def get_audit_trail(conn: oracledb.Connection, limit: int = 100, user_filter: str = None, action_filter: str = None, only_failures: bool = False) -> pd.DataFrame:
@@ -246,7 +246,7 @@ def render_auditing(conn: oracledb.Connection):
                             enable_stmt += " WHENEVER NOT SUCCESSFUL"
                         run_dml(conn, enable_stmt)
 
-                    st.success(f"Política **{pol_name}** creada y habilitada exitosamente.")
+                    flash(f"Política **{pol_name}** creada y habilitada exitosamente.")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al configurar política: {e}")
@@ -265,14 +265,14 @@ def render_auditing(conn: oracledb.Connection):
             try:
                 if "Deshabilitar" in action_type:
                     run_dml(conn, f"NOAUDIT POLICY {pol_target}")
-                    st.success(f"Política {pol_target} deshabilitada.")
+                    flash(f"Política {pol_target} deshabilitada.")
                 else:
                     try:
                         run_dml(conn, f"NOAUDIT POLICY {pol_target}")
                     except Exception:
                         pass
                     run_dml(conn, f"DROP AUDIT POLICY {pol_target}")
-                    st.success(f"Política {pol_target} eliminada.")
+                    flash(f"Política {pol_target} eliminada.")
                 st.rerun()
             except Exception as e:
                 st.error(f"Error en gestión de política: {e}")

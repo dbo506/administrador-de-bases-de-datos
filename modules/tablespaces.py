@@ -7,7 +7,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import oracledb
-from modules.common import run_query, run_dml
+from modules.common import run_query, run_dml, flash
 
 
 def get_tablespaces_metrics(conn: oracledb.Connection) -> pd.DataFrame:
@@ -39,13 +39,19 @@ def get_tablespaces_metrics(conn: oracledb.Connection) -> pd.DataFrame:
         FROM dba_free_space
         GROUP BY tablespace_name
         UNION ALL
-        SELECT 
+        SELECT
             tf.tablespace_name,
-            ROUND((SUM(tf.bytes) - NVL(SUM(tu.blocks * dt.block_size), 0)) / 1024 / 1024, 2) AS free_mb
-        FROM dba_temp_files tf
-        JOIN dba_tablespaces dt ON tf.tablespace_name = dt.tablespace_name
-        LEFT JOIN gv$temp_extent_pool tu ON tf.tablespace_name = tu.tablespace_name
-        GROUP BY tf.tablespace_name
+            ROUND((tf.total_bytes - NVL(tu.used_bytes, 0)) / 1024 / 1024, 2) AS free_mb
+        FROM (
+            SELECT tablespace_name, SUM(bytes) AS total_bytes
+            FROM dba_temp_files
+            GROUP BY tablespace_name
+        ) tf
+        LEFT JOIN (
+            SELECT tablespace_name, SUM(bytes_used) AS used_bytes
+            FROM gv$temp_extent_pool
+            GROUP BY tablespace_name
+        ) tu ON tf.tablespace_name = tu.tablespace_name
     )
     SELECT 
         t.tablespace_name AS "TABLESPACE",
@@ -262,7 +268,7 @@ def render_tablespaces(conn: oracledb.Connection):
                     try:
                         ddl = f"ALTER TABLESPACE {selected_ts} {new_status}"
                         run_dml(conn, ddl)
-                        st.success(f"Estado de {selected_ts} modificado a {new_status}.")
+                        flash(f"Estado de {selected_ts} modificado a {new_status}.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al cambiar disponibilidad: {e}")
@@ -274,7 +280,7 @@ def render_tablespaces(conn: oracledb.Connection):
                     try:
                         ddl = f"ALTER TABLESPACE {selected_ts} {new_mode}"
                         run_dml(conn, ddl)
-                        st.success(f"Modo de {selected_ts} cambiado a {new_mode}.")
+                        flash(f"Modo de {selected_ts} cambiado a {new_mode}.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al cambiar modo de lectura/escritura: {e}")
@@ -308,7 +314,7 @@ def render_tablespaces(conn: oracledb.Connection):
                         if df_auto:
                             ddl += " AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED"
                         run_dml(conn, ddl)
-                        st.success(f"Datafile agregado a {target_ts} con éxito.")
+                        flash(f"Datafile agregado a {target_ts} con éxito.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al agregar datafile: {e}")
@@ -328,7 +334,7 @@ def render_tablespaces(conn: oracledb.Connection):
                         keyword = "TEMPFILE" if file_type == "TEMPFILE" else "DATAFILE"
                         ddl = f"ALTER DATABASE {keyword} '{selected_file}' RESIZE {new_size}M"
                         run_dml(conn, ddl)
-                        st.success(f"Archivo {selected_file} redimensionado a {new_size} MB con éxito.")
+                        flash(f"Archivo {selected_file} redimensionado a {new_size} MB con éxito.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al redimensionar archivo: {e}")
@@ -369,8 +375,7 @@ def render_tablespaces(conn: oracledb.Connection):
                                 ddl += " AND DATAFILES"
 
                             run_dml(conn, ddl)
-                            st.success(f"Tablespace **{drop_ts_target}** eliminado con éxito.")
-                            st.code(ddl, language="sql")
+                            flash(f"Tablespace **{drop_ts_target}** eliminado con éxito.", code=ddl)
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al eliminar tablespace: {e}")

@@ -193,6 +193,15 @@ def render_backup_restore(conn: oracledb.Connection, conn_params: dict):
             sel_dmp_file = st.selectbox("Archivo de volcado a restaurar (.dmp):", dmp_files)
             restore_mode = st.radio("Modalidad de Restauración:", ["Por Esquemas (Schemas)", "Por Tablas", "Completo (Full)"], horizontal=True)
 
+            restore_schemas = []
+            restore_tables = []
+            if "Esquemas" in restore_mode:
+                raw_schemas = st.text_input("Esquema(s) a restaurar (separados por coma):", placeholder="HR, VENTAS")
+                restore_schemas = [s.strip().upper() for s in raw_schemas.split(",") if s.strip()]
+            elif "Tablas" in restore_mode:
+                raw_tables = st.text_input("Tabla(s) a restaurar (ESQUEMA.TABLA, separadas por coma):", placeholder="HR.EMPLOYEES, HR.JOBS")
+                restore_tables = [t.strip().upper() for t in raw_tables.split(",") if t.strip()]
+
         with col_r2:
             timestamp_rst = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             imp_log_name = st.text_input("Nombre de Log de Importación:", value=f"IMP_{timestamp_rst}.log")
@@ -224,6 +233,13 @@ def render_backup_restore(conn: oracledb.Connection, conn_params: dict):
                 ts_dst = st.text_input("Tablespace Destino:", placeholder="NUEVO_TS").strip().upper()
 
         if st.button("📥 Iniciar Proceso de Restauración", type="primary", use_container_width=True):
+            if "Esquemas" in restore_mode and not restore_schemas:
+                st.warning("Debe indicar al menos un esquema para restaurar.")
+                return
+            if "Tablas" in restore_mode and not restore_tables:
+                st.warning("Debe indicar al menos una tabla para restaurar.")
+                return
+
             imp_lines = [
                 userid_line,
                 f"DIRECTORY={sel_imp_dir}",
@@ -234,6 +250,10 @@ def render_backup_restore(conn: oracledb.Connection, conn_params: dict):
 
             if "Completo" in restore_mode:
                 imp_lines.append("FULL=YES")
+            elif "Esquemas" in restore_mode:
+                imp_lines.append(f"SCHEMAS={','.join(restore_schemas)}")
+            else:
+                imp_lines.append(f"TABLES={','.join(restore_tables)}")
 
             if use_remap_schema and remap_src and remap_dst:
                 imp_lines.append(f"REMAP_SCHEMA={remap_src}:{remap_dst}")

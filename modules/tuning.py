@@ -11,7 +11,7 @@ import uuid
 import streamlit as st
 import pandas as pd
 import oracledb
-from modules.common import run_query, run_dml
+from modules.common import run_query, run_dml, flash
 
 
 def get_schemas_list(conn: oracledb.Connection) -> list:
@@ -197,7 +197,7 @@ def render_tuning(conn: oracledb.Connection):
                                     "tabname": sel_table,
                                     "cascade_flag": cascade_idx
                                 })
-                        st.success(f"Estadísticas recolectadas para {sel_schema}.{sel_table}.")
+                        flash(f"Estadísticas recolectadas para {sel_schema}.{sel_table}.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al recolectar estadísticas de tabla: {e}")
@@ -218,7 +218,7 @@ def render_tuning(conn: oracledb.Connection):
                             """
                             with conn.cursor() as cur:
                                 cur.execute(plsql, {"ownname": sel_schema})
-                        st.success(f"Estadísticas completas del esquema {sel_schema} actualizadas.")
+                        flash(f"Estadísticas completas del esquema {sel_schema} actualizadas.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al recolectar estadísticas de esquema: {e}")
@@ -270,14 +270,16 @@ def render_tuning(conn: oracledb.Connection):
 
         with tab_idx_create:
             st.markdown("#### Crear Nuevo Índice")
+            # Fuera del formulario para que las columnas se actualicen al cambiar de tabla
+            sel_tab_idx = st.selectbox("Tabla Destino", idx_tables if idx_tables else [""], key="idx_create_table")
+            col_options = get_columns_list(conn, idx_schema, sel_tab_idx) if sel_tab_idx else []
+
             with st.form("form_create_index"):
                 c_i1, c_i2 = st.columns(2)
                 with c_i1:
-                    sel_tab_idx = st.selectbox("Tabla Destino", idx_tables if idx_tables else [""])
                     idx_type_choice = st.selectbox("Tipo de Índice", ["B-Tree Estándar (NORMAL)", "Único (UNIQUE)", "Bitmap (BITMAP)"])
                     new_idx_name = st.text_input("Nombre del Índice", placeholder="IDX_EMPLEADOS_SALARIO").strip().upper()
                 with c_i2:
-                    col_options = get_columns_list(conn, idx_schema, sel_tab_idx) if sel_tab_idx else []
                     sel_columns = st.multiselect("Columnas a Indexar (en orden)", col_options)
                     
                     # Tablespaces disponibles
@@ -301,8 +303,7 @@ def render_tuning(conn: oracledb.Connection):
                         cols_str = ", ".join(sel_columns)
                         ddl_idx = f"CREATE {type_str} INDEX {idx_schema}.{new_idx_name} ON {idx_schema}.{sel_tab_idx} ({cols_str}) TABLESPACE {sel_idx_ts}"
                         run_dml(conn, ddl_idx)
-                        st.success(f"Índice **{new_idx_name}** creado con éxito.")
-                        st.code(ddl_idx, language="sql")
+                        flash(f"Índice **{new_idx_name}** creado con éxito.", code=ddl_idx)
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al crear índice: {e}")
@@ -327,7 +328,7 @@ def render_tuning(conn: oracledb.Connection):
                                 if online_rb:
                                     ddl_rb += " ONLINE"
                                 run_dml(conn, ddl_rb)
-                                st.success(f"Índice {idx_choice} reconstruido exitosamente.")
+                                flash(f"Índice {idx_choice} reconstruido exitosamente.")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al reconstruir índice: {e}")
@@ -339,7 +340,7 @@ def render_tuning(conn: oracledb.Connection):
                             try:
                                 ddl_drop = f"DROP INDEX {idx_schema}.{idx_choice}"
                                 run_dml(conn, ddl_drop)
-                                st.success(f"Índice {idx_choice} eliminado.")
+                                flash(f"Índice {idx_choice} eliminado.")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al eliminar índice: {e}")

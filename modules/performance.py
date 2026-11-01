@@ -11,7 +11,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import oracledb
-from modules.common import run_query, run_dml
+from modules.common import run_query, run_dml, flash
 
 
 def get_memory_metrics(conn: oracledb.Connection) -> dict:
@@ -255,7 +255,7 @@ def render_performance(conn: oracledb.Connection):
                     if immediate:
                         stmt_kill += " IMMEDIATE"
                     run_dml(conn, stmt_kill)
-                    st.success(f"Sesión {kill_sid},{kill_serial} terminada correctamente.")
+                    flash(f"Sesión {kill_sid},{kill_serial} terminada correctamente.")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al terminar sesión: {e}")
@@ -286,7 +286,7 @@ def render_performance(conn: oracledb.Connection):
                 if st.button(f"🚨 Terminar Sesión Bloqueadora (SID {sel_sid_to_kill}, SERIAL {sel_serial_to_kill})", type="primary"):
                     try:
                         run_dml(conn, f"ALTER SYSTEM KILL SESSION '{sel_sid_to_kill},{sel_serial_to_kill}' IMMEDIATE")
-                        st.success(f"Sesión bloqueadora {sel_sid_to_kill} terminada.")
+                        flash(f"Sesión bloqueadora {sel_sid_to_kill} terminada.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al desbloquear: {e}")

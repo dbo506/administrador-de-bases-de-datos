@@ -5,6 +5,26 @@ Funciones auxiliares y de ejecución de consultas para la aplicación de adminis
 from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 import oracledb
+import streamlit as st
+
+
+def flash(message: str, kind: str = "success", code: Optional[str] = None) -> None:
+    """
+    Guarda un mensaje para mostrarlo tras st.rerun() (si no, el rerun lo borra antes de verse).
+    """
+    st.session_state["_flash"] = (kind, message, code)
+
+
+def show_flash() -> None:
+    """
+    Muestra y descarta el mensaje pendiente guardado con flash().
+    """
+    pending = st.session_state.pop("_flash", None)
+    if pending:
+        kind, message, code = pending
+        getattr(st, kind)(message)
+        if code:
+            st.code(code, language="sql")
 
 
 def run_query(connection: oracledb.Connection, query: str, params: Optional[Dict[str, Any]] = None) -> pd.DataFrame:

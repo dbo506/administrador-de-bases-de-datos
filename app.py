@@ -6,6 +6,7 @@ EIF-402 Administración de Bases de Datos - Universidad Nacional (UNA).
 import streamlit as st
 import oracledb
 from db_connection import get_connection, test_connection
+from modules.common import flash, show_flash
 from modules.tablespaces import render_tablespaces
 from modules.tuning import render_tuning
 from modules.performance import render_performance
@@ -130,7 +131,7 @@ def show_login_screen():
                         "is_sysdba": is_sysdba
                     }
                     st.session_state.instance_info = inst_info
-                    st.success("¡Conexión establecida exitosamente!")
+                    flash("¡Conexión establecida exitosamente!")
                     st.rerun()
 
                 except oracledb.Error as db_err:
@@ -192,6 +193,8 @@ def show_main_dashboard():
     conn = get_active_db_connection()
     if conn is None:
         return
+
+    show_flash()
 
     try:
         if menu_choice == "🏠 Inicio y Resumen":
