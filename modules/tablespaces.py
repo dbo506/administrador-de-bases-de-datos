@@ -79,7 +79,7 @@ def get_datafiles(conn: oracledb.Connection, tablespace_name: str = None) -> pd.
     """
     Lista los archivos de datos (datafiles y tempfiles) de la base de datos.
     """
-    sql = """
+    sql = """  
     SELECT 
         file_id AS "ID",
         file_name AS "ARCHIVO",
@@ -345,18 +345,33 @@ def render_tablespaces(conn: oracledb.Connection):
     # 5. ELIMINAR TABLESPACE
     with tab_drop:
         st.subheader("🗑️ Eliminar Tablespace (DROP TABLESPACE)")
-        st.warning("⚠️ **Precaución**: Esta operación es destructiva e irreversible. Asegúrese de tener respaldos de los datos importantes.")
+        st.warning(
+            "⚠️ **Precaución**: Esta operación es destructiva e irreversible. Asegúrese de tener respaldos de los datos importantes.")
 
         try:
-            df_drop = run_query(conn, "SELECT tablespace_name, contents FROM dba_tablespaces WHERE tablespace_name NOT IN ('SYSTEM', 'SYSAUX', 'UNDOTBS1', 'TEMP') ORDER BY tablespace_name")
+            df_drop = run_query(conn, """
+                SELECT tablespace_name, contents
+                FROM dba_tablespaces
+                WHERE tablespace_name NOT IN ('SYSTEM', 'SYSAUX')
+                  AND tablespace_name NOT IN (
+                        SELECT property_value FROM database_properties
+                        WHERE property_name IN ('DEFAULT_TEMP_TABLESPACE',
+                                                'DEFAULT_PERMANENT_TABLESPACE'))
+                  AND tablespace_name NOT IN (
+                        SELECT value FROM v$parameter WHERE name = 'undo_tablespace')
+                ORDER BY tablespace_name
+            """)
             if df_drop.empty:
-                st.info("No hay tablespaces creados por el usuario disponibles para eliminar (los tablespaces del sistema SYSTEM, SYSAUX, UNDO y TEMP están protegidos).")
+                st.info(
+                    "No hay tablespaces creados por el usuario disponibles para eliminar (los del sistema y los predeterminados están protegidos).")
             else:
                 drop_ts_target = st.selectbox("Tablespace a Eliminar", df_drop["TABLESPACE_NAME"].tolist())
-                
+
                 c_inc = st.checkbox("INCLUDING CONTENTS (Eliminar todos los objetos y datos contenidos)", value=True)
-                c_data = st.checkbox("AND DATAFILES (Eliminar físicamente los archivos .dbf del disco)", value=True)
-                c_casc = st.checkbox("CASCADE CONSTRAINTS (Eliminar restricciones de integridad referencial dependientes)", value=True)
+                c_data = st.checkbox("AND DATAFILES (Eliminar físicamente los archivos del disco)", value=True,
+                                     disabled=not c_inc)
+                c_casc = st.checkbox("CASCADE CONSTRAINTS (Eliminar restricciones dependientes)", value=True,
+                                     disabled=not c_inc)
 
                 confirm_txt = st.text_input(f"Escriba exactamente '{drop_ts_target}' para confirmar:")
                 btn_drop = st.button("🚨 Eliminar Tablespace Definitivamente", type="primary")
@@ -365,20 +380,27 @@ def render_tablespaces(conn: oracledb.Connection):
                     if confirm_txt.strip() != drop_ts_target:
                         st.error("El texto de confirmación no coincide con el nombre del tablespace.")
                     else:
+                        ddl = ""
                         try:
-                            ddl = f"DROP TABLESPACE {drop_ts_target}"
+                            tipo = df_drop.loc[
+                                df_drop["TABLESPACE_NAME"] == drop_ts_target, "CONTENTS"
+                            ].iloc[0]
+
+                            partes = [f'DROP TABLESPACE "{drop_ts_target}"']
                             if c_inc:
-                                ddl += " INCLUDING CONTENTS"
-                            if c_casc:
-                                ddl += " CASCADE CONSTRAINTS"
-                            if c_data:
-                                ddl += " AND DATAFILES"
+                                partes.append("INCLUDING CONTENTS")
+                                partes.append("AND DATAFILES" if c_data else "KEEP DATAFILES")
+                                if c_casc and tipo == "PERMANENT":
+                                    partes.append("CASCADE CONSTRAINTS")
+                            ddl = " ".join(partes)
 
                             run_dml(conn, ddl)
                             flash(f"Tablespace **{drop_ts_target}** eliminado con éxito.", code=ddl)
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al eliminar tablespace: {e}")
+                            if ddl:
+                                st.code(ddl, language="sql")
 
         except Exception as e:
             st.error(f"Error al cargar lista de tablespaces para eliminación: {e}")
