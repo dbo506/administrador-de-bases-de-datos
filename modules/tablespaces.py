@@ -111,22 +111,6 @@ def get_datafiles(conn: oracledb.Connection, tablespace_name: str = None) -> pd.
     return df
 
 
-def get_default_datafile_directory(conn: oracledb.Connection) -> str:
-    """
-    Intenta obtener el directorio por defecto de los datafiles de Oracle.
-    """
-    try:
-        df = run_query(conn, "SELECT file_name FROM dba_data_files WHERE ROWNUM = 1")
-        if not df.empty:
-            full_path = df.iloc[0, 0]
-            # Extraer ruta del directorio padre
-            import os
-            return os.path.dirname(full_path)
-    except Exception:
-        pass
-    return "C:\\app\\oracle\\oradata\\XE"
-
-
 def render_tablespaces(conn: oracledb.Connection):
     """
     Renderiza la vista y controles de administración de Tablespaces.
@@ -151,7 +135,7 @@ def render_tablespaces(conn: oracledb.Connection):
 
         try:
             df_ts = get_tablespaces_metrics(conn)
-            
+
             # Métricas rápidas
             total_db_mb = df_ts["TOTAL_MB"].sum()
             used_db_mb = df_ts["USADO_MB"].sum()
@@ -199,7 +183,6 @@ def render_tablespaces(conn: oracledb.Connection):
     # 2. CREAR TABLESPACE
     with tab_create:
         st.subheader("Crear Nuevo Tablespace")
-        default_dir = get_default_datafile_directory(conn)
 
         with st.form("form_create_tablespace"):
             c1, c2 = st.columns(2)
@@ -207,12 +190,15 @@ def render_tablespaces(conn: oracledb.Connection):
                 new_ts_name = st.text_input("Nombre del Tablespace", placeholder="EJEMPLO_TS").strip().upper()
                 ts_type = st.selectbox("Tipo de Tablespace", ["PERMANENT", "TEMPORARY", "UNDO"])
                 init_size_mb = st.number_input("Tamaño Inicial (MB)", min_value=10, max_value=102400, value=100, step=10)
-            
+
             with c2:
-                suggested_filename = f"{default_dir}\\{new_ts_name.lower() if new_ts_name else 'datafile'}01.dbf"
-                datafile_path = st.text_input("Ruta completa del Datafile", value=suggested_filename)
+                datafile_path = st.text_input(
+                    "Ruta completa del Datafile",
+                    value="",
+                    placeholder=r"C:\DataFiles\mi_tablespace01.dbf"
+                ).strip()
                 autoextend = st.checkbox("Habilitar Autoextend", value=True)
-                
+
             if autoextend:
                 ca, cb = st.columns(2)
                 with ca:
@@ -255,7 +241,7 @@ def render_tablespaces(conn: oracledb.Connection):
         try:
             df_ts_all = run_query(conn, "SELECT tablespace_name, status, contents FROM dba_tablespaces ORDER BY tablespace_name")
             ts_options = df_ts_all["TABLESPACE_NAME"].tolist()
-            
+
             selected_ts = st.selectbox("Seleccionar Tablespace a modificar", ts_options)
             current_status = df_ts_all[df_ts_all["TABLESPACE_NAME"] == selected_ts]["STATUS"].iloc[0]
             st.info(f"Estado actual de **{selected_ts}**: `{current_status}`")
@@ -303,21 +289,28 @@ def render_tablespaces(conn: oracledb.Connection):
                 st.markdown("#### ➕ Agregar Datafile a Tablespace")
                 with st.form("form_add_df"):
                     target_ts = st.selectbox("Tablespace Destino", df_ts_all["TABLESPACE_NAME"].tolist(), key="add_df_ts")
-                    new_df_path = st.text_input("Ruta y nombre del nuevo archivo .dbf", value=f"{default_dir}\\{target_ts.lower()}_add01.dbf")
+                    new_df_path = st.text_input(
+                        "Ruta y nombre del nuevo archivo .dbf",
+                        value="",
+                        placeholder=r"C:\DataFiles\mi_archivo02.dbf"
+                    ).strip()
                     df_size = st.number_input("Tamaño (MB)", min_value=10, max_value=51200, value=50, step=10)
                     df_auto = st.checkbox("Autoextend", value=True, key="add_df_auto")
                     btn_add_df = st.form_submit_button("Agregar Datafile")
 
                 if btn_add_df:
-                    try:
-                        ddl = f"ALTER TABLESPACE {target_ts} ADD DATAFILE '{new_df_path}' SIZE {df_size}M"
-                        if df_auto:
-                            ddl += " AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED"
-                        run_dml(conn, ddl)
-                        flash(f"Datafile agregado a {target_ts} con éxito.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error al agregar datafile: {e}")
+                    if not new_df_path:
+                        st.warning("Debe ingresar la ruta del nuevo archivo .dbf.")
+                    else:
+                        try:
+                            ddl = f"ALTER TABLESPACE {target_ts} ADD DATAFILE '{new_df_path}' SIZE {df_size}M"
+                            if df_auto:
+                                ddl += " AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED"
+                            run_dml(conn, ddl)
+                            flash(f"Datafile agregado a {target_ts} con éxito.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al agregar datafile: {e}")
 
             # Redimensionar Datafile
             with col_resize:
@@ -404,4 +397,3 @@ def render_tablespaces(conn: oracledb.Connection):
 
         except Exception as e:
             st.error(f"Error al cargar lista de tablespaces para eliminación: {e}")
-
