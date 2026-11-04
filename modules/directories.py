@@ -140,7 +140,8 @@ def render_directories(conn: oracledb.Connection):
                         pass
 
                     # Botón de Eliminación
-                    if st.button(f"🗑️ Eliminar {sel_file_action}", type="primary", use_container_width=True):
+                    confirm_file_del = st.checkbox(f"Confirmo que deseo eliminar {sel_file_action} del disco", key=f"confirm_del_{sel_file_action}")
+                    if st.button(f"🗑️ Eliminar {sel_file_action}", type="primary", use_container_width=True, disabled=not confirm_file_del):
                         try:
                             os.remove(target_file_path)
                             flash(f"Archivo {sel_file_action} eliminado con éxito.")
