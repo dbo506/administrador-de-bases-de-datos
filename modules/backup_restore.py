@@ -30,6 +30,7 @@ def execute_datapump(command_type: str, par_content: str) -> tuple:
     try:
         process = subprocess.Popen(
             cmd,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -86,7 +87,7 @@ def render_backup_restore(conn: oracledb.Connection, conn_params: dict):
     if is_sysdba or user.lower() == "sys":
         userid_line = f'USERID="{user}/{password}@{connect_target} as sysdba"'
     else:
-        userid_line = f'USERID={user}/{password}@{connect_target}'
+        userid_line = f'USERID="{user}/{password}@{connect_target}"'
 
     # 1. CREACIÓN DE RESPALDOS (EXPDP)
     if active_tab == "📤 Crear Respaldo (Export / expdp)":
