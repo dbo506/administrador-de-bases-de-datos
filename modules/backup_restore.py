@@ -9,6 +9,7 @@ import os
 import subprocess
 import datetime
 import tempfile
+import locale
 import streamlit as st
 import pandas as pd
 import oracledb
@@ -34,7 +35,7 @@ def execute_datapump(command_type: str, par_content: str) -> tuple:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            encoding="utf-8",
+            encoding=locale.getpreferredencoding(False),
             errors="replace"
         )
         output_lines = []
