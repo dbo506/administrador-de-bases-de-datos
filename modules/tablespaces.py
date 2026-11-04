@@ -290,6 +290,7 @@ def render_tablespaces(conn: oracledb.Connection):
         st.subheader("Archivos de Datos (Datafiles y Tempfiles)")
         try:
             df_df = get_datafiles(conn)
+            df_ts_all = run_query(conn, "SELECT tablespace_name FROM dba_tablespaces ORDER BY tablespace_name")
             st.dataframe(df_df, use_container_width=True, hide_index=True)
 
             st.divider()
