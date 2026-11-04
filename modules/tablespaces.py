@@ -3,11 +3,12 @@ Módulo para la administración de Tablespaces y Datafiles en Oracle 21c XE.
 Permite listar, crear, modificar, redimensionar datafiles, cambiar estado y eliminar tablespaces.
 """
 
+import os
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import oracledb
-from modules.common import run_query, run_dml
+from modules.common import run_query, run_dml, flash, render_subtabs
 
 
 def get_tablespaces_metrics(conn: oracledb.Connection) -> pd.DataFrame:
@@ -39,13 +40,19 @@ def get_tablespaces_metrics(conn: oracledb.Connection) -> pd.DataFrame:
         FROM dba_free_space
         GROUP BY tablespace_name
         UNION ALL
-        SELECT 
+        SELECT
             tf.tablespace_name,
-            ROUND((SUM(tf.bytes) - NVL(SUM(tu.blocks * dt.block_size), 0)) / 1024 / 1024, 2) AS free_mb
-        FROM dba_temp_files tf
-        JOIN dba_tablespaces dt ON tf.tablespace_name = dt.tablespace_name
-        LEFT JOIN gv$temp_extent_pool tu ON tf.tablespace_name = tu.tablespace_name
-        GROUP BY tf.tablespace_name
+            ROUND((tf.total_bytes - NVL(tu.used_bytes, 0)) / 1024 / 1024, 2) AS free_mb
+        FROM (
+            SELECT tablespace_name, SUM(bytes) AS total_bytes
+            FROM dba_temp_files
+            GROUP BY tablespace_name
+        ) tf
+        LEFT JOIN (
+            SELECT tablespace_name, SUM(bytes_used) AS used_bytes
+            FROM gv$temp_extent_pool
+            GROUP BY tablespace_name
+        ) tu ON tf.tablespace_name = tu.tablespace_name
     )
     SELECT 
         t.tablespace_name AS "TABLESPACE",
@@ -73,7 +80,7 @@ def get_datafiles(conn: oracledb.Connection, tablespace_name: str = None) -> pd.
     """
     Lista los archivos de datos (datafiles y tempfiles) de la base de datos.
     """
-    sql = """
+    sql = """  
     SELECT 
         file_id AS "ID",
         file_name AS "ARCHIVO",
@@ -105,22 +112,6 @@ def get_datafiles(conn: oracledb.Connection, tablespace_name: str = None) -> pd.
     return df
 
 
-def get_default_datafile_directory(conn: oracledb.Connection) -> str:
-    """
-    Intenta obtener el directorio por defecto de los datafiles de Oracle.
-    """
-    try:
-        df = run_query(conn, "SELECT file_name FROM dba_data_files WHERE ROWNUM = 1")
-        if not df.empty:
-            full_path = df.iloc[0, 0]
-            # Extraer ruta del directorio padre
-            import os
-            return os.path.dirname(full_path)
-    except Exception:
-        pass
-    return "C:\\app\\oracle\\oradata\\XE"
-
-
 def render_tablespaces(conn: oracledb.Connection):
     """
     Renderiza la vista y controles de administración de Tablespaces.
@@ -128,16 +119,16 @@ def render_tablespaces(conn: oracledb.Connection):
     st.header("💾 Administración de Tablespaces y Datafiles")
     st.caption("Supervisión de espacio en disco, creación, modificación y gestión de archivos de datos.")
 
-    tab_overview, tab_create, tab_modify, tab_datafiles, tab_drop = st.tabs([
+    active_tab = render_subtabs([
         "📊 Monitoreo General",
         "➕ Crear Tablespace",
         "⚙️ Modificar / Estado",
         "📁 Gestión de Datafiles",
         "🗑️ Eliminar Tablespace"
-    ])
+    ], key="ts_active_subtab")
 
     # 1. MONITOREO GENERAL
-    with tab_overview:
+    if active_tab == "📊 Monitoreo General":
         col_refresh, _ = st.columns([1, 5])
         with col_refresh:
             if st.button("🔄 Actualizar", key="refresh_ts"):
@@ -145,7 +136,7 @@ def render_tablespaces(conn: oracledb.Connection):
 
         try:
             df_ts = get_tablespaces_metrics(conn)
-            
+
             # Métricas rápidas
             total_db_mb = df_ts["TOTAL_MB"].sum()
             used_db_mb = df_ts["USADO_MB"].sum()
@@ -191,9 +182,8 @@ def render_tablespaces(conn: oracledb.Connection):
             st.error(f"Error al consultar métricas de tablespaces: {e}")
 
     # 2. CREAR TABLESPACE
-    with tab_create:
+    elif active_tab == "➕ Crear Tablespace":
         st.subheader("Crear Nuevo Tablespace")
-        default_dir = get_default_datafile_directory(conn)
 
         with st.form("form_create_tablespace"):
             c1, c2 = st.columns(2)
@@ -201,12 +191,16 @@ def render_tablespaces(conn: oracledb.Connection):
                 new_ts_name = st.text_input("Nombre del Tablespace", placeholder="EJEMPLO_TS").strip().upper()
                 ts_type = st.selectbox("Tipo de Tablespace", ["PERMANENT", "TEMPORARY", "UNDO"])
                 init_size_mb = st.number_input("Tamaño Inicial (MB)", min_value=10, max_value=102400, value=100, step=10)
-            
+
             with c2:
-                suggested_filename = f"{default_dir}\\{new_ts_name.lower() if new_ts_name else 'datafile'}01.dbf"
-                datafile_path = st.text_input("Ruta completa del Datafile", value=suggested_filename)
+                datafile_path = st.text_input(
+                    "Ruta completa del Datafile (archivo con extensión .dbf)",
+                    value="",
+                    placeholder=r"C:\DATA\mi_tablespace01.dbf",
+                    help="Debe incluir la ruta completa Y el nombre del archivo terminado en .dbf (ejemplo: C:\\DATA\\test_una01.dbf)."
+                ).strip()
                 autoextend = st.checkbox("Habilitar Autoextend", value=True)
-                
+
             if autoextend:
                 ca, cb = st.columns(2)
                 with ca:
@@ -218,17 +212,26 @@ def render_tablespaces(conn: oracledb.Connection):
             create_btn = st.form_submit_button("Crear Tablespace", use_container_width=True)
 
         if create_btn:
-            if not new_ts_name or not datafile_path:
+            clean_path = datafile_path.strip().strip("'\"")
+
+            if not new_ts_name or not clean_path:
                 st.warning("Debe ingresar un nombre de tablespace y una ruta válida de datafile.")
+            elif os.path.isdir(clean_path) or clean_path.endswith(("\\", "/")) or not os.path.splitext(clean_path)[1]:
+                suggested = os.path.join(clean_path, f"{new_ts_name.lower()}01.dbf").replace("/", "\\")
+                st.error(
+                    f"⚠️ **Ruta incompleta:** `{clean_path}` es una carpeta, no un archivo.\n\n"
+                    f"Oracle requiere la ruta completa incluyendo el nombre del archivo y la extensión `.dbf`.\n\n"
+                    f"👉 **Usa esta ruta:** `{suggested}`"
+                )
             else:
                 try:
                     # Construir sentencia DDL
                     if ts_type == "TEMPORARY":
-                        ddl = f"CREATE TEMPORARY TABLESPACE {new_ts_name} TEMPFILE '{datafile_path}' SIZE {init_size_mb}M"
+                        ddl = f"CREATE TEMPORARY TABLESPACE {new_ts_name} TEMPFILE '{clean_path}' SIZE {init_size_mb}M"
                     elif ts_type == "UNDO":
-                        ddl = f"CREATE UNDO TABLESPACE {new_ts_name} DATAFILE '{datafile_path}' SIZE {init_size_mb}M"
+                        ddl = f"CREATE UNDO TABLESPACE {new_ts_name} DATAFILE '{clean_path}' SIZE {init_size_mb}M"
                     else:
-                        ddl = f"CREATE TABLESPACE {new_ts_name} DATAFILE '{datafile_path}' SIZE {init_size_mb}M"
+                        ddl = f"CREATE TABLESPACE {new_ts_name} DATAFILE '{clean_path}' SIZE {init_size_mb}M"
 
                     if autoextend:
                         max_clause = "UNLIMITED" if unlimited else f"{max_size_mb}M"
@@ -238,18 +241,18 @@ def render_tablespaces(conn: oracledb.Connection):
 
                     with st.spinner("Ejecutando DDL de creación de Tablespace..."):
                         run_dml(conn, ddl)
-                    st.success(f"¡Tablespace **{new_ts_name}** creado con éxito!")
-                    st.code(ddl, language="sql")
+                    flash(f"¡Tablespace **{new_ts_name}** creado con éxito!", code=ddl)
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Error al crear tablespace: {e}")
 
     # 3. MODIFICAR / ESTADO TABLESPACE
-    with tab_modify:
+    elif active_tab == "⚙️ Modificar / Estado":
         st.subheader("Modificar Estado y Parámetros del Tablespace")
         try:
             df_ts_all = run_query(conn, "SELECT tablespace_name, status, contents FROM dba_tablespaces ORDER BY tablespace_name")
             ts_options = df_ts_all["TABLESPACE_NAME"].tolist()
-            
+
             selected_ts = st.selectbox("Seleccionar Tablespace a modificar", ts_options)
             current_status = df_ts_all[df_ts_all["TABLESPACE_NAME"] == selected_ts]["STATUS"].iloc[0]
             st.info(f"Estado actual de **{selected_ts}**: `{current_status}`")
@@ -262,7 +265,7 @@ def render_tablespaces(conn: oracledb.Connection):
                     try:
                         ddl = f"ALTER TABLESPACE {selected_ts} {new_status}"
                         run_dml(conn, ddl)
-                        st.success(f"Estado de {selected_ts} modificado a {new_status}.")
+                        flash(f"Estado de {selected_ts} modificado a {new_status}.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al cambiar disponibilidad: {e}")
@@ -274,7 +277,7 @@ def render_tablespaces(conn: oracledb.Connection):
                     try:
                         ddl = f"ALTER TABLESPACE {selected_ts} {new_mode}"
                         run_dml(conn, ddl)
-                        st.success(f"Modo de {selected_ts} cambiado a {new_mode}.")
+                        flash(f"Modo de {selected_ts} cambiado a {new_mode}.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al cambiar modo de lectura/escritura: {e}")
@@ -283,7 +286,7 @@ def render_tablespaces(conn: oracledb.Connection):
             st.error(f"Error al cargar tablespaces: {e}")
 
     # 4. GESTIÓN DE DATAFILES
-    with tab_datafiles:
+    elif active_tab == "📁 Gestión de Datafiles":
         st.subheader("Archivos de Datos (Datafiles y Tempfiles)")
         try:
             df_df = get_datafiles(conn)
@@ -297,21 +300,37 @@ def render_tablespaces(conn: oracledb.Connection):
                 st.markdown("#### ➕ Agregar Datafile a Tablespace")
                 with st.form("form_add_df"):
                     target_ts = st.selectbox("Tablespace Destino", df_ts_all["TABLESPACE_NAME"].tolist(), key="add_df_ts")
-                    new_df_path = st.text_input("Ruta y nombre del nuevo archivo .dbf", value=f"{default_dir}\\{target_ts.lower()}_add01.dbf")
+                    new_df_path = st.text_input(
+                        "Ruta y nombre del nuevo archivo .dbf",
+                        value="",
+                        placeholder=r"C:\DATA\mi_archivo02.dbf",
+                        help="Debe incluir la ruta completa con el archivo .dbf (ejemplo: C:\\DATA\\archivo02.dbf)."
+                    ).strip()
                     df_size = st.number_input("Tamaño (MB)", min_value=10, max_value=51200, value=50, step=10)
                     df_auto = st.checkbox("Autoextend", value=True, key="add_df_auto")
                     btn_add_df = st.form_submit_button("Agregar Datafile")
 
                 if btn_add_df:
-                    try:
-                        ddl = f"ALTER TABLESPACE {target_ts} ADD DATAFILE '{new_df_path}' SIZE {df_size}M"
-                        if df_auto:
-                            ddl += " AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED"
-                        run_dml(conn, ddl)
-                        st.success(f"Datafile agregado a {target_ts} con éxito.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error al agregar datafile: {e}")
+                    clean_add_path = new_df_path.strip().strip("'\"")
+                    if not clean_add_path:
+                        st.warning("Debe ingresar la ruta del nuevo archivo .dbf.")
+                    elif os.path.isdir(clean_add_path) or clean_add_path.endswith(("\\", "/")) or not os.path.splitext(clean_add_path)[1]:
+                        sugg_add = os.path.join(clean_add_path, f"{target_ts.lower()}_add01.dbf").replace("/", "\\")
+                        st.error(
+                            f"⚠️ **Ruta incompleta:** `{clean_add_path}` es una carpeta, no un archivo.\n\n"
+                            f"Oracle requiere el nombre del archivo terminado en `.dbf`.\n\n"
+                            f"👉 **Usa esta ruta:** `{sugg_add}`"
+                        )
+                    else:
+                        try:
+                            ddl = f"ALTER TABLESPACE {target_ts} ADD DATAFILE '{clean_add_path}' SIZE {df_size}M"
+                            if df_auto:
+                                ddl += " AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED"
+                            run_dml(conn, ddl)
+                            flash(f"Datafile agregado a {target_ts} con éxito.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al agregar datafile: {e}")
 
             # Redimensionar Datafile
             with col_resize:
@@ -328,7 +347,7 @@ def render_tablespaces(conn: oracledb.Connection):
                         keyword = "TEMPFILE" if file_type == "TEMPFILE" else "DATAFILE"
                         ddl = f"ALTER DATABASE {keyword} '{selected_file}' RESIZE {new_size}M"
                         run_dml(conn, ddl)
-                        st.success(f"Archivo {selected_file} redimensionado a {new_size} MB con éxito.")
+                        flash(f"Archivo {selected_file} redimensionado a {new_size} MB con éxito.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al redimensionar archivo: {e}")
@@ -337,20 +356,35 @@ def render_tablespaces(conn: oracledb.Connection):
             st.error(f"Error en gestión de datafiles: {e}")
 
     # 5. ELIMINAR TABLESPACE
-    with tab_drop:
+    elif active_tab == "🗑️ Eliminar Tablespace":
         st.subheader("🗑️ Eliminar Tablespace (DROP TABLESPACE)")
-        st.warning("⚠️ **Precaución**: Esta operación es destructiva e irreversible. Asegúrese de tener respaldos de los datos importantes.")
+        st.warning(
+            "⚠️ **Precaución**: Esta operación es destructiva e irreversible. Asegúrese de tener respaldos de los datos importantes.")
 
         try:
-            df_drop = run_query(conn, "SELECT tablespace_name, contents FROM dba_tablespaces WHERE tablespace_name NOT IN ('SYSTEM', 'SYSAUX', 'UNDOTBS1', 'TEMP') ORDER BY tablespace_name")
+            df_drop = run_query(conn, """
+                SELECT tablespace_name, contents
+                FROM dba_tablespaces
+                WHERE tablespace_name NOT IN ('SYSTEM', 'SYSAUX')
+                  AND tablespace_name NOT IN (
+                        SELECT property_value FROM database_properties
+                        WHERE property_name IN ('DEFAULT_TEMP_TABLESPACE',
+                                                'DEFAULT_PERMANENT_TABLESPACE'))
+                  AND tablespace_name NOT IN (
+                        SELECT value FROM v$parameter WHERE name = 'undo_tablespace')
+                ORDER BY tablespace_name
+            """)
             if df_drop.empty:
-                st.info("No hay tablespaces creados por el usuario disponibles para eliminar (los tablespaces del sistema SYSTEM, SYSAUX, UNDO y TEMP están protegidos).")
+                st.info(
+                    "No hay tablespaces creados por el usuario disponibles para eliminar (los del sistema y los predeterminados están protegidos).")
             else:
                 drop_ts_target = st.selectbox("Tablespace a Eliminar", df_drop["TABLESPACE_NAME"].tolist())
-                
+
                 c_inc = st.checkbox("INCLUDING CONTENTS (Eliminar todos los objetos y datos contenidos)", value=True)
-                c_data = st.checkbox("AND DATAFILES (Eliminar físicamente los archivos .dbf del disco)", value=True)
-                c_casc = st.checkbox("CASCADE CONSTRAINTS (Eliminar restricciones de integridad referencial dependientes)", value=True)
+                c_data = st.checkbox("AND DATAFILES (Eliminar físicamente los archivos del disco)", value=True,
+                                     disabled=not c_inc)
+                c_casc = st.checkbox("CASCADE CONSTRAINTS (Eliminar restricciones dependientes)", value=True,
+                                     disabled=not c_inc)
 
                 confirm_txt = st.text_input(f"Escriba exactamente '{drop_ts_target}' para confirmar:")
                 btn_drop = st.button("🚨 Eliminar Tablespace Definitivamente", type="primary")
@@ -359,22 +393,27 @@ def render_tablespaces(conn: oracledb.Connection):
                     if confirm_txt.strip() != drop_ts_target:
                         st.error("El texto de confirmación no coincide con el nombre del tablespace.")
                     else:
+                        ddl = ""
                         try:
-                            ddl = f"DROP TABLESPACE {drop_ts_target}"
+                            tipo = df_drop.loc[
+                                df_drop["TABLESPACE_NAME"] == drop_ts_target, "CONTENTS"
+                            ].iloc[0]
+
+                            partes = [f'DROP TABLESPACE "{drop_ts_target}"']
                             if c_inc:
-                                ddl += " INCLUDING CONTENTS"
-                            if c_casc:
-                                ddl += " CASCADE CONSTRAINTS"
-                            if c_data:
-                                ddl += " AND DATAFILES"
+                                partes.append("INCLUDING CONTENTS")
+                                partes.append("AND DATAFILES" if c_data else "KEEP DATAFILES")
+                                if c_casc and tipo == "PERMANENT":
+                                    partes.append("CASCADE CONSTRAINTS")
+                            ddl = " ".join(partes)
 
                             run_dml(conn, ddl)
-                            st.success(f"Tablespace **{drop_ts_target}** eliminado con éxito.")
-                            st.code(ddl, language="sql")
+                            flash(f"Tablespace **{drop_ts_target}** eliminado con éxito.", code=ddl)
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error al eliminar tablespace: {e}")
+                            if ddl:
+                                st.code(ddl, language="sql")
 
         except Exception as e:
             st.error(f"Error al cargar lista de tablespaces para eliminación: {e}")
-

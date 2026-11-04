@@ -12,7 +12,7 @@ import tempfile
 import streamlit as st
 import pandas as pd
 import oracledb
-from modules.common import run_query
+from modules.common import run_query, render_subtabs
 from modules.directories import get_oracle_directories, list_files_in_directory
 
 
@@ -60,10 +60,10 @@ def render_backup_restore(conn: oracledb.Connection, conn_params: dict):
     st.header("📦 Respaldos y Recuperación (Oracle Data Pump)")
     st.caption("Generación y restauración de copias de seguridad lógicas de esquemas, tablas o base de datos completa.")
 
-    tab_backup, tab_restore = st.tabs([
+    active_tab = render_subtabs([
         "📤 Crear Respaldo (Export / expdp)",
         "📥 Recuperar Respaldo (Import / impdp)"
-    ])
+    ], key="backup_active_subtab")
 
     # Directorios disponibles
     df_dirs = get_oracle_directories(conn)
@@ -89,7 +89,7 @@ def render_backup_restore(conn: oracledb.Connection, conn_params: dict):
         userid_line = f'USERID={user}/{password}@{connect_target}'
 
     # 1. CREACIÓN DE RESPALDOS (EXPDP)
-    with tab_backup:
+    if active_tab == "📤 Crear Respaldo (Export / expdp)":
         st.subheader("Configuración de Exportación (expdp)")
 
         mode = st.radio(
@@ -129,7 +129,18 @@ def render_backup_restore(conn: oracledb.Connection, conn_params: dict):
 
             dumpfile_name = st.text_input("Nombre del archivo de volcado (.dmp):", value=default_dmp_name)
             logfile_name = st.text_input("Nombre del archivo de registro (.log):", value=default_log_name)
-            compression = st.selectbox("Compresión:", ["ALL", "DATA_ONLY", "METADATA_ONLY", "NONE"], index=0)
+            compression = st.selectbox(
+                "Compresión:",
+                ["NONE", "METADATA_ONLY", "ALL", "DATA_ONLY"],
+                index=0,
+                format_func=lambda x: {
+                    "NONE": "NONE (Sin compresión - Recomendado para Oracle XE)",
+                    "METADATA_ONLY": "METADATA_ONLY (Solo metadatos - Soportado en XE)",
+                    "ALL": "ALL (Todo - Requiere Oracle Enterprise Edition)",
+                    "DATA_ONLY": "DATA_ONLY (Solo datos - Requiere Oracle Enterprise Edition)"
+                }.get(x, x),
+                help="Oracle 21c XE no incluye la opción de compresión de datos de Enterprise Edition. Use NONE o METADATA_ONLY."
+            )
             reuse_dump = st.checkbox("Sobrescribir si el archivo ya existe (REUSE_DUMPFILES=YES)", value=True)
 
         if st.button("🚀 Ejecutar Respaldo Ahora", type="primary", use_container_width=True):
@@ -171,7 +182,7 @@ def render_backup_restore(conn: oracledb.Connection, conn_params: dict):
                     st.code(output_text, language="text")
 
     # 2. RECUPERACIÓN DE RESPALDOS (IMPDP)
-    with tab_restore:
+    elif active_tab == "📥 Recuperar Respaldo (Import / impdp)":
         st.subheader("Configuración de Importación / Restauración (impdp)")
 
         col_r1, col_r2 = st.columns(2)
@@ -192,6 +203,15 @@ def render_backup_restore(conn: oracledb.Connection, conn_params: dict):
 
             sel_dmp_file = st.selectbox("Archivo de volcado a restaurar (.dmp):", dmp_files)
             restore_mode = st.radio("Modalidad de Restauración:", ["Por Esquemas (Schemas)", "Por Tablas", "Completo (Full)"], horizontal=True)
+
+            restore_schemas = []
+            restore_tables = []
+            if "Esquemas" in restore_mode:
+                raw_schemas = st.text_input("Esquema(s) a restaurar (separados por coma):", placeholder="HR, VENTAS")
+                restore_schemas = [s.strip().upper() for s in raw_schemas.split(",") if s.strip()]
+            elif "Tablas" in restore_mode:
+                raw_tables = st.text_input("Tabla(s) a restaurar (ESQUEMA.TABLA, separadas por coma):", placeholder="HR.EMPLOYEES, HR.JOBS")
+                restore_tables = [t.strip().upper() for t in raw_tables.split(",") if t.strip()]
 
         with col_r2:
             timestamp_rst = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -234,6 +254,10 @@ def render_backup_restore(conn: oracledb.Connection, conn_params: dict):
 
             if "Completo" in restore_mode:
                 imp_lines.append("FULL=YES")
+            elif "Esquemas" in restore_mode and restore_schemas:
+                imp_lines.append(f"SCHEMAS={','.join(restore_schemas)}")
+            elif "Tablas" in restore_mode and restore_tables:
+                imp_lines.append(f"TABLES={','.join(restore_tables)}")
 
             if use_remap_schema and remap_src and remap_dst:
                 imp_lines.append(f"REMAP_SCHEMA={remap_src}:{remap_dst}")
@@ -255,4 +279,3 @@ def render_backup_restore(conn: oracledb.Connection, conn_params: dict):
 
             with st.expander("Consola y Registro de Salida (impdp)", expanded=True):
                 st.code(output_text, language="text")
-
