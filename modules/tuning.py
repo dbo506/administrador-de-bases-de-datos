@@ -271,10 +271,10 @@ def render_tuning(conn: oracledb.Connection):
 
         elif active_idx_tab == "➕ Crear Índice":
             st.markdown("#### Crear Nuevo Índice")
+            sel_tab_idx = st.selectbox("Tabla Destino", idx_tables if idx_tables else [""])
             with st.form("form_create_index"):
                 c_i1, c_i2 = st.columns(2)
                 with c_i1:
-                    sel_tab_idx = st.selectbox("Tabla Destino", idx_tables if idx_tables else [""])
                     idx_type_choice = st.selectbox("Tipo de Índice", ["B-Tree Estándar (NORMAL)", "Único (UNIQUE)", "Bitmap (BITMAP)"])
                     new_idx_name = st.text_input("Nombre del Índice", placeholder="IDX_EMPLEADOS_SALARIO").strip().upper()
                 with c_i2:
