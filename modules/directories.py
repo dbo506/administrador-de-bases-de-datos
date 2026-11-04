@@ -165,7 +165,7 @@ def render_directories(conn: oracledb.Connection):
                 new_dir_name = st.text_input("Nombre del Directorio en Oracle", placeholder="EXP_BACKUP_DIR").strip().upper()
                 new_dir_path = st.text_input("Ruta Física en el Disco", value="C:\\oracle_backups")
                 create_folder = st.checkbox("Crear la carpeta en Windows si no existe", value=True)
-                grant_public = st.checkbox("Conceder permisos READ, WRITE a PUBLIC", value=True)
+                grant_public = st.checkbox("Conceder permisos READ, WRITE a PUBLIC", value=False)
                 btn_create_d = st.form_submit_button("Crear Directorio")
 
             if btn_create_d:
