@@ -11,7 +11,7 @@ import uuid
 import streamlit as st
 import pandas as pd
 import oracledb
-from modules.common import run_query, run_dml, flash, render_subtabs
+from modules.common import run_query, run_dml, flash, render_subtabs, get_user_tablespaces
 
 
 def get_schemas_list(conn: oracledb.Connection) -> list:
@@ -282,9 +282,8 @@ def render_tuning(conn: oracledb.Connection):
                     sel_columns = st.multiselect("Columnas a Indexar (en orden)", col_options)
                     
                     # Tablespaces disponibles
-                    ts_df = run_query(conn, "SELECT tablespace_name FROM dba_tablespaces WHERE contents = 'PERMANENT'")
-                    ts_list = ts_df["TABLESPACE_NAME"].tolist() if not ts_df.empty else ["USERS"]
-                    sel_idx_ts = st.selectbox("Tablespace Almacén", ts_list)
+                    ts_list, ts_default = get_user_tablespaces(conn)
+                    sel_idx_ts = st.selectbox("Tablespace Almacén", ts_list, index=ts_default)
 
                 btn_create_idx = st.form_submit_button("Crear Índice", use_container_width=True)
 

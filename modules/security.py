@@ -9,7 +9,7 @@ Incluye:
 import streamlit as st
 import pandas as pd
 import oracledb
-from modules.common import run_query, run_dml, flash, render_subtabs
+from modules.common import run_query, run_dml, flash, render_subtabs, get_user_tablespaces
 
 
 def get_users_list(conn: oracledb.Connection, only_open: bool = False) -> pd.DataFrame:
@@ -144,15 +144,14 @@ def render_security(conn: oracledb.Connection):
 
         # Obtener tablespaces disponibles
         try:
-            ts_perm_df = run_query(conn, "SELECT tablespace_name FROM dba_tablespaces WHERE contents = 'PERMANENT'")
+            ts_perm_list, ts_perm_default = get_user_tablespaces(conn)
             ts_temp_df = run_query(conn, "SELECT tablespace_name FROM dba_tablespaces WHERE contents = 'TEMPORARY'")
             profiles_df = run_query(conn, "SELECT DISTINCT profile FROM dba_profiles ORDER BY profile")
             
-            ts_perm_list = ts_perm_df["TABLESPACE_NAME"].tolist() if not ts_perm_df.empty else ["USERS"]
             ts_temp_list = ts_temp_df["TABLESPACE_NAME"].tolist() if not ts_temp_df.empty else ["TEMP"]
             prof_list = profiles_df["PROFILE"].tolist() if not profiles_df.empty else ["DEFAULT"]
         except Exception:
-            ts_perm_list = ["USERS"]
+            ts_perm_list, ts_perm_default = ["USERS"], 0
             ts_temp_list = ["TEMP"]
             prof_list = ["DEFAULT"]
 
@@ -163,7 +162,7 @@ def render_security(conn: oracledb.Connection):
                 new_user_pwd = st.text_input("Contraseña Temporal / Inicial", type="password")
                 sel_profile = st.selectbox("Perfil de Seguridad", prof_list)
             with c_cu2:
-                sel_def_ts = st.selectbox("Tablespace por Defecto", ts_perm_list)
+                sel_def_ts = st.selectbox("Tablespace por Defecto", ts_perm_list, index=ts_perm_default)
                 sel_tmp_ts = st.selectbox("Tablespace Temporal", ts_temp_list)
                 quota_unlimited = st.checkbox("Cuota Ilimitada en Tablespace por Defecto", value=True)
 

@@ -164,6 +164,26 @@ def run_dml(connection: oracledb.Connection, statement: str, params: Optional[Di
         connection.commit()
 
 
+def get_user_tablespaces(connection: oracledb.Connection) -> Tuple[List[str], int]:
+    """
+    Retorna los tablespaces permanentes sin SYSTEM ni SYSAUX y la posición del
+    tablespace permanente por defecto de la base de datos dentro de esa lista.
+    """
+    df = run_query(
+        connection,
+        "SELECT tablespace_name FROM dba_tablespaces "
+        "WHERE contents = 'PERMANENT' AND tablespace_name NOT IN ('SYSTEM', 'SYSAUX') "
+        "ORDER BY tablespace_name",
+    )
+    names = df["TABLESPACE_NAME"].tolist() if not df.empty else ["USERS"]
+    default_df = run_query(
+        connection,
+        "SELECT property_value FROM database_properties WHERE property_name = 'DEFAULT_PERMANENT_TABLESPACE'",
+    )
+    default_name = default_df.iloc[0, 0] if not default_df.empty else "USERS"
+    return names, names.index(default_name) if default_name in names else 0
+
+
 def get_oracle_version(connection: oracledb.Connection) -> str:
     """
     Retorna la versión activa de Oracle Database.
