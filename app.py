@@ -99,7 +99,7 @@ def show_login_screen():
             f1, f2 = st.columns(2)
             with f1:
                 host = st.text_input("Host / Dirección IP", value="localhost")
-                service_name = st.selectbox("Servicio Oracle", options=["XEPDB1", "XE"], index=0, help="XEPDB1 es la PDB conectable recomendada para usuarios y datos; XE es el CDB raíz.")
+                service_name = st.selectbox("Servicio Oracle", options=["XEPDB1", "XE", "FREEPDB1", "FREE"], index=0, accept_new_options=True, help="XEPDB1 es la PDB conectable recomendada para usuarios y datos; XE es el CDB raíz. También puede escribir otro nombre de servicio.")
                 user = st.text_input("Usuario DBA", value="system")
             with f2:
                 port = st.number_input("Puerto Listener", min_value=1, max_value=65535, value=1521)
