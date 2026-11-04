@@ -148,7 +148,7 @@ def run_query(connection: oracledb.Connection, query: str, params: Optional[Dict
             return pd.DataFrame()
             
         columns = [col[0] for col in cursor.description]
-        rows = cursor.fetchall()
+        rows = [tuple(v.read() if isinstance(v, oracledb.LOB) else v for v in row) for row in cursor.fetchall()]
         return pd.DataFrame(rows, columns=columns)
 
 
