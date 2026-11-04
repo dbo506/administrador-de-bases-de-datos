@@ -9,7 +9,7 @@ Incluye:
 import streamlit as st
 import pandas as pd
 import oracledb
-from modules.common import run_query, run_dml, flash
+from modules.common import run_query, run_dml, flash, render_subtabs
 
 
 def get_users_list(conn: oracledb.Connection, only_open: bool = False) -> pd.DataFrame:
@@ -98,16 +98,16 @@ def render_security(conn: oracledb.Connection):
     st.header("👥 Seguridad y Administración de Usuarios")
     st.caption("Control de cuentas, contraseñas, asignación de roles, privilegios y políticas de seguridad.")
 
-    tab_users, tab_create_user, tab_manage_user, tab_roles_privs, tab_profiles = st.tabs([
+    active_tab = render_subtabs([
         "📋 Directorio de Usuarios",
         "➕ Crear Usuario",
         "⚙️ Modificar / Bloquear / Drop",
         "🔑 Roles y Privilegios",
         "🛡️ Perfiles de Seguridad"
-    ])
+    ], key="sec_active_subtab")
 
     # 1. DIRECTORIO DE USUARIOS
-    with tab_users:
+    if active_tab == "📋 Directorio de Usuarios":
         st.subheader("Usuarios Registrados en Oracle")
         
         c_u1, c_u2 = st.columns([2, 1])
@@ -131,7 +131,7 @@ def render_security(conn: oracledb.Connection):
             mu1, mu2, mu3, mu4 = st.columns(4)
             mu1.metric("Usuarios", total_u)
             mu2.metric("Abiertos (OPEN)", open_u)
-            mu3.metric("Bloqueados (LOCKED)", locked_u)
+            mu2.metric("Bloqueados (LOCKED)", locked_u)
             mu4.metric("Expirados (EXPIRED)", expired_u)
 
             st.dataframe(df_users, use_container_width=True, hide_index=True)
@@ -139,7 +139,7 @@ def render_security(conn: oracledb.Connection):
             st.error(f"Error al listar usuarios: {e}")
 
     # 2. CREAR USUARIO
-    with tab_create_user:
+    elif active_tab == "➕ Crear Usuario":
         st.subheader("Crear Nueva Cuenta de Usuario")
 
         # Obtener tablespaces disponibles
@@ -198,7 +198,7 @@ def render_security(conn: oracledb.Connection):
                     st.error(f"Error al crear usuario: {e}")
 
     # 3. MODIFICAR / BLOQUEAR / DROP
-    with tab_manage_user:
+    elif active_tab == "⚙️ Modificar / Bloquear / Drop":
         st.subheader("Mantenimiento de Usuarios")
 
         try:
@@ -226,7 +226,8 @@ def render_security(conn: oracledb.Connection):
                             run_dml(conn, f"ALTER USER {selected_u} IDENTIFIED BY \"{new_pwd_change}\"")
                             if expire_now:
                                 run_dml(conn, f"ALTER USER {selected_u} PASSWORD EXPIRE")
-                            st.success(f"Contraseña de {selected_u} actualizada.")
+                            flash(f"Contraseña de {selected_u} actualizada.")
+                            st.rerun()
                         except Exception as e:
                             st.error(f"Error al cambiar contraseña: {e}")
 
@@ -274,9 +275,13 @@ def render_security(conn: oracledb.Connection):
             st.error(f"Error al cargar módulo de modificación: {e}")
 
     # 4. ROLES Y PRIVILEGIOS
-    with tab_roles_privs:
+    elif active_tab == "🔑 Roles y Privilegios":
         st.subheader("Asignación de Roles y Privilegios")
         try:
+            df_target_users = run_query(conn, "SELECT username, account_status FROM dba_users WHERE oracle_maintained = 'N' OR username IN ('SYSTEM', 'HR') ORDER BY username")
+            if df_target_users.empty:
+                df_target_users = run_query(conn, "SELECT username, account_status FROM dba_users ORDER BY username")
+
             target_user_privs = st.selectbox("Seleccione el Usuario:", df_target_users["USERNAME"].tolist(), key="privs_user_sel")
             
             c_r1, c_r2 = st.columns(2)
@@ -338,12 +343,15 @@ def render_security(conn: oracledb.Connection):
             st.error(f"Error en administración de roles: {e}")
 
     # 5. PERFILES DE SEGURIDAD
-    with tab_profiles:
+    elif active_tab == "🛡️ Perfiles de Seguridad":
         st.subheader("Políticas de Contraseñas y Recursos (DBA_PROFILES)")
         st.caption("Configuración de bloqueo por intentos fallidos, caducidad de contraseñas y límites.")
         try:
             df_prof = get_profiles_summary(conn)
             st.dataframe(df_prof, use_container_width=True, hide_index=True)
+
+            profiles_df = run_query(conn, "SELECT DISTINCT profile FROM dba_profiles ORDER BY profile")
+            prof_list = profiles_df["PROFILE"].tolist() if not profiles_df.empty else ["DEFAULT"]
 
             st.divider()
             st.markdown("#### Configurar Parámetro de Perfil")
@@ -374,4 +382,3 @@ def render_security(conn: oracledb.Connection):
 
         except Exception as e:
             st.error(f"Error al consultar perfiles: {e}")
-

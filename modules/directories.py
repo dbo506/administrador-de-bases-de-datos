@@ -12,7 +12,7 @@ import datetime
 import streamlit as st
 import pandas as pd
 import oracledb
-from modules.common import run_query, run_dml, flash
+from modules.common import run_query, run_dml, flash, render_subtabs
 
 
 def get_oracle_directories(conn: oracledb.Connection) -> pd.DataFrame:
@@ -66,24 +66,23 @@ def render_directories(conn: oracledb.Connection):
     st.header("📁 Administración de Directorios y Archivos de Respaldo")
     st.caption("Configuración de objetos DIRECTORY en Oracle y explorador de archivos .dmp y .log.")
 
-    tab_explore, tab_manage_dirs = st.tabs([
+    active_tab = render_subtabs([
         "📂 Explorador de Archivos de Respaldo",
         "⚙️ Gestión de Directorios de Oracle"
-    ])
+    ], key="dirs_active_subtab")
+
+    df_dirs = get_oracle_directories(conn)
+    if df_dirs.empty:
+        st.warning("No hay directorios registrados en Oracle.")
+        return
+
+    dir_options = df_dirs["NOMBRE_DIRECTORIO"].tolist()
+    default_idx = dir_options.index("DATA_PUMP_DIR") if "DATA_PUMP_DIR" in dir_options else 0
 
     # 1. EXPLORADOR DE ARCHIVOS
-    with tab_explore:
+    if active_tab == "📂 Explorador de Archivos de Respaldo":
         st.subheader("Archivos de Volcado (.dmp) y Logs (.log)")
 
-        df_dirs = get_oracle_directories(conn)
-        if df_dirs.empty:
-            st.warning("No hay directorios registrados en Oracle.")
-            return
-
-        # Selector de directorio
-        dir_options = df_dirs["NOMBRE_DIRECTORIO"].tolist()
-        # Intentar preseleccionar DATA_PUMP_DIR si existe
-        default_idx = dir_options.index("DATA_PUMP_DIR") if "DATA_PUMP_DIR" in dir_options else 0
         selected_dir_name = st.selectbox("Seleccione el Directorio de Oracle:", dir_options, index=default_idx)
 
         selected_row = df_dirs[df_dirs["NOMBRE_DIRECTORIO"] == selected_dir_name].iloc[0]
@@ -150,7 +149,7 @@ def render_directories(conn: oracledb.Connection):
                             st.error(f"Error al eliminar archivo: {e}")
 
     # 2. GESTIÓN DE DIRECTORIOS DE ORACLE
-    with tab_manage_dirs:
+    elif active_tab == "⚙️ Gestión de Directorios de Oracle":
         st.subheader("Crear y Eliminar Directorios de Oracle")
         
         st.markdown("#### Directorios Existentes")
@@ -202,4 +201,3 @@ def render_directories(conn: oracledb.Connection):
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al eliminar directorio: {e}")
-

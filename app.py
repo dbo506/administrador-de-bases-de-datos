@@ -46,6 +46,10 @@ st.markdown("""
     div[data-testid="stSidebarNav"] {
         display: none;
     }
+    /* Estilo de subpestañas segmentadas */
+    div[data-testid="stSegmentedControl"] {
+        margin-bottom: 1rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -84,11 +88,11 @@ def get_active_db_connection():
 
 # --- PANTALLA DE INICIO DE SESIÓN ---
 def show_login_screen():
-    st.markdown("<div class='main-header'>🗄️ Oracle 21c XE - Panel de Administración</div>", unsafe_allow_html=True)
-    st.markdown("<div class='sub-header'>Proyecto Final - EIF-402 Administración de Bases de Datos (UNA)</div>", unsafe_allow_html=True)
+    st.markdown("<div class='main-header' style='text-align: center; margin-top: 2rem;'>🗄️ Oracle 21c XE - Panel de Administración</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sub-header' style='text-align: center;'>Proyecto Final - EIF-402 Administración de Bases de Datos (UNA)</div>", unsafe_allow_html=True)
 
-    c1, c2 = st.columns([3, 2])
-    with c1:
+    _, col_login, _ = st.columns([1, 1.8, 1])
+    with col_login:
         with st.form("oracle_login_form"):
             st.subheader("Conexión al Motor Oracle")
             
@@ -139,18 +143,6 @@ def show_login_screen():
                     st.error(f"Error de conexión Oracle [{getattr(err, 'code', 'N/A')}]: {getattr(err, 'message', str(db_err))}")
                 except Exception as ex:
                     st.error(f"Error inesperado: {ex}")
-
-    with c2:
-        st.info("""
-        ### Módulos del Sistema:
-        * 💾 **Administración de Tablespaces** (Capacidad, creación, datafiles y drop).
-        * ⚡ **Tuning de Consultas** (Explain Plan, `DBMS_STATS`, gestión de índices).
-        * 📊 **Performance** (SGA/PGA, Hit Ratios, Bloqueos, Top SQL y Kill Session).
-        * 🛡️ **Auditoría** (Unified Auditing, logins fallidos, creación de políticas).
-        * 👥 **Seguridad de Usuarios** (Cuentas, roles, privilegios, perfiles).
-        * 📦 **Respaldos y Recuperación** (Data Pump `expdp`/`impdp`: Schemas, Tablas, Full).
-        * 📁 **Directorios y Archivos** (`DBA_DIRECTORIES`, visor de `.log`, descarga y limpieza).
-        """)
 
 
 # --- PANTALLA PRINCIPAL CON NAVEGACIÓN ---

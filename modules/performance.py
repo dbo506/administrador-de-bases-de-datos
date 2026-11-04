@@ -11,7 +11,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import oracledb
-from modules.common import run_query, run_dml, flash
+from modules.common import run_query, run_dml, flash, render_subtabs
 
 
 def get_memory_metrics(conn: oracledb.Connection) -> dict:
@@ -137,15 +137,15 @@ def render_performance(conn: oracledb.Connection):
     st.header("📊 Performance y Monitoreo de la Base de Datos")
     st.caption("Salud del motor, distribución de memoria, sesiones activas, bloqueos y Top SQL.")
 
-    tab_mem, tab_sessions, tab_locks, tab_top_sql = st.tabs([
+    active_tab = render_subtabs([
         "🧠 Memoria y Eficiencia (SGA/PGA)",
         "👥 Sesiones de Usuarios",
         "🔒 Bloqueos (Lock Tree)",
         "🔥 Consultas Top SQL"
-    ])
+    ], key="perf_active_subtab")
 
     # 1. MEMORIA Y HIT RATIOS
-    with tab_mem:
+    if active_tab == "🧠 Memoria y Eficiencia (SGA/PGA)":
         st.subheader("Eficiencia de Cache y Memoria")
         try:
             mem = get_memory_metrics(conn)
@@ -214,7 +214,7 @@ def render_performance(conn: oracledb.Connection):
             st.error(f"Error al obtener métricas de memoria: {e}")
 
     # 2. SESIONES DE USUARIOS
-    with tab_sessions:
+    elif active_tab == "👥 Sesiones de Usuarios":
         st.subheader("Sesiones Activas y Conectadas")
         col_ref_s, col_kill = st.columns([1, 4])
         with col_ref_s:
@@ -264,7 +264,7 @@ def render_performance(conn: oracledb.Connection):
             st.error(f"Error al consultar sesiones: {e}")
 
     # 3. BLOQUEOS
-    with tab_locks:
+    elif active_tab == "🔒 Bloqueos (Lock Tree)":
         st.subheader("Detección de Bloqueos en Tiempo Real (Lock Tree)")
         st.caption("Identifica sesiones en conflicto donde un usuario bloquea recursos que otros están esperando.")
         try:
@@ -294,7 +294,7 @@ def render_performance(conn: oracledb.Connection):
             st.error(f"Error al verificar bloqueos: {e}")
 
     # 4. TOP SQL
-    with tab_top_sql:
+    elif active_tab == "🔥 Consultas Top SQL":
         st.subheader("Top Consultas SQL Más Costosas")
         c_crit1, c_crit2 = st.columns([2, 1])
         with c_crit1:
@@ -341,4 +341,3 @@ def render_performance(conn: oracledb.Connection):
 
         except Exception as e:
             st.error(f"Error al obtener Top SQL: {e}")
-

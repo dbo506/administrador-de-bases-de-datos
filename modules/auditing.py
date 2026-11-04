@@ -10,7 +10,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import oracledb
-from modules.common import run_query, run_dml, flash
+from modules.common import run_query, run_dml, flash, render_subtabs
 
 
 def get_audit_trail(conn: oracledb.Connection, limit: int = 100, user_filter: str = None, action_filter: str = None, only_failures: bool = False) -> pd.DataFrame:
@@ -117,15 +117,15 @@ def render_auditing(conn: oracledb.Connection):
     st.header("🛡️ Auditoría de la Base de Datos")
     st.caption("Inspección de eventos de seguridad, inicios de sesión, cambios estructurales (DDL) y políticas de auditoría.")
 
-    tab_trail, tab_failed_logins, tab_policies, tab_create_policy = st.tabs([
+    active_tab = render_subtabs([
         "📜 Registros de Auditoría",
         "🚨 Intentos Fallidos / Logins",
         "📋 Políticas de Auditoría",
         "⚙️ Crear / Habilitar Política"
-    ])
+    ], key="audit_active_subtab")
 
     # 1. REGISTROS DE AUDITORÍA
-    with tab_trail:
+    if active_tab == "📜 Registros de Auditoría":
         st.subheader("Pista de Auditoría")
 
         # Filtros
@@ -168,7 +168,7 @@ def render_auditing(conn: oracledb.Connection):
             st.error(f"Error al consultar pista de auditoría: {e}")
 
     # 2. LOGINS FALLIDOS
-    with tab_failed_logins:
+    elif active_tab == "🚨 Intentos Fallidos / Logins":
         st.subheader("🚨 Intentos de Inicio de Sesión Fallidos")
         st.caption("Detección de accesos no autorizados o contraseñas inválidas (ORA-01017, ORA-28000, etc.).")
 
@@ -199,7 +199,7 @@ def render_auditing(conn: oracledb.Connection):
             st.error(f"Error al consultar logins fallidos: {e}")
 
     # 3. POLÍTICAS DE AUDITORÍA
-    with tab_policies:
+    elif active_tab == "📋 Políticas de Auditoría":
         st.subheader("Políticas de Auditoría Unificada")
         try:
             df_pol = get_audit_policies(conn)
@@ -211,7 +211,7 @@ def render_auditing(conn: oracledb.Connection):
             st.error(f"Error al obtener políticas: {e}")
 
     # 4. CREAR Y HABILITAR POLÍTICA
-    with tab_create_policy:
+    elif active_tab == "⚙️ Crear / Habilitar Política":
         st.subheader("Configurar Nueva Política de Auditoría")
         
         with st.form("form_create_policy"):
@@ -276,4 +276,3 @@ def render_auditing(conn: oracledb.Connection):
                 st.rerun()
             except Exception as e:
                 st.error(f"Error en gestión de política: {e}")
-

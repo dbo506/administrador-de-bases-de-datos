@@ -11,7 +11,7 @@ import uuid
 import streamlit as st
 import pandas as pd
 import oracledb
-from modules.common import run_query, run_dml, flash
+from modules.common import run_query, run_dml, flash, render_subtabs
 
 
 def get_schemas_list(conn: oracledb.Connection) -> list:
@@ -51,14 +51,14 @@ def render_tuning(conn: oracledb.Connection):
     st.header("⚡ Tuning y Optimización de Consultas")
     st.caption("Análisis de planes de ejecución, recolección de estadísticas de CBO y administración de índices.")
 
-    tab_explain, tab_stats, tab_indexes = st.tabs([
+    active_tab = render_subtabs([
         "🔍 Plan de Ejecución (Explain Plan)",
         "📈 Estadísticas (DBMS_STATS)",
         "🗂️ Gestión de Índices"
-    ])
+    ], key="tuning_active_subtab")
 
     # 1. EXPLAIN PLAN
-    with tab_explain:
+    if active_tab == "🔍 Plan de Ejecución (Explain Plan)":
         st.subheader("Generador de Planes de Ejecución")
         st.markdown(
             "Ingrese una consulta `SELECT`, `UPDATE` o `DELETE` para evaluar el plan de ejecución "
@@ -136,7 +136,7 @@ def render_tuning(conn: oracledb.Connection):
                     st.error(f"Error al generar el plan de ejecución: {e}")
 
     # 2. ESTADÍSTICAS (DBMS_STATS)
-    with tab_stats:
+    elif active_tab == "📈 Estadísticas (DBMS_STATS)":
         st.subheader("Estadísticas del Optimizador (DBMS_STATS)")
         st.caption("Visualice y refresque las estadísticas para garantizar que el optimizador elija las mejores rutas de acceso.")
 
@@ -224,20 +224,21 @@ def render_tuning(conn: oracledb.Connection):
                         st.error(f"Error al recolectar estadísticas de esquema: {e}")
 
     # 3. GESTIÓN DE ÍNDICES
-    with tab_indexes:
+    elif active_tab == "🗂️ Gestión de Índices":
         st.subheader("Administración de Índices")
         st.caption("Cree, monitoree, reconstruya o elimine índices para acelerar búsquedas y optimizar consultas.")
 
+        schemas = get_schemas_list(conn)
         idx_schema = st.selectbox("Esquema:", schemas, key="idx_schema_sel")
         idx_tables = get_tables_list(conn, idx_schema)
 
-        tab_idx_list, tab_idx_create, tab_idx_actions = st.tabs([
+        active_idx_tab = render_subtabs([
             "📋 Lista de Índices",
             "➕ Crear Índice",
             "🛠️ Reconstruir / Eliminar"
-        ])
+        ], key="idx_active_subtab")
 
-        with tab_idx_list:
+        if active_idx_tab == "📋 Lista de Índices":
             try:
                 idx_sql = """
                 SELECT 
@@ -268,18 +269,16 @@ def render_tuning(conn: oracledb.Connection):
             except Exception as e:
                 st.error(f"Error al consultar índices: {e}")
 
-        with tab_idx_create:
+        elif active_idx_tab == "➕ Crear Índice":
             st.markdown("#### Crear Nuevo Índice")
-            # Fuera del formulario para que las columnas se actualicen al cambiar de tabla
-            sel_tab_idx = st.selectbox("Tabla Destino", idx_tables if idx_tables else [""], key="idx_create_table")
-            col_options = get_columns_list(conn, idx_schema, sel_tab_idx) if sel_tab_idx else []
-
             with st.form("form_create_index"):
                 c_i1, c_i2 = st.columns(2)
                 with c_i1:
+                    sel_tab_idx = st.selectbox("Tabla Destino", idx_tables if idx_tables else [""])
                     idx_type_choice = st.selectbox("Tipo de Índice", ["B-Tree Estándar (NORMAL)", "Único (UNIQUE)", "Bitmap (BITMAP)"])
                     new_idx_name = st.text_input("Nombre del Índice", placeholder="IDX_EMPLEADOS_SALARIO").strip().upper()
                 with c_i2:
+                    col_options = get_columns_list(conn, idx_schema, sel_tab_idx) if sel_tab_idx else []
                     sel_columns = st.multiselect("Columnas a Indexar (en orden)", col_options)
                     
                     # Tablespaces disponibles
@@ -308,7 +307,7 @@ def render_tuning(conn: oracledb.Connection):
                     except Exception as e:
                         st.error(f"Error al crear índice: {e}")
 
-        with tab_idx_actions:
+        elif active_idx_tab == "🛠️ Reconstruir / Eliminar":
             st.markdown("#### Reconstrucción y Eliminación de Índices")
             try:
                 indexes_df = run_query(conn, "SELECT index_name, table_name, status FROM all_indexes WHERE owner = :owner ORDER BY index_name", {"owner": idx_schema})
@@ -346,4 +345,3 @@ def render_tuning(conn: oracledb.Connection):
                                 st.error(f"Error al eliminar índice: {e}")
             except Exception as e:
                 st.error(f"Error en acciones de índice: {e}")
-
