@@ -131,7 +131,7 @@ def render_security(conn: oracledb.Connection):
             mu1, mu2, mu3, mu4 = st.columns(4)
             mu1.metric("Usuarios", total_u)
             mu2.metric("Abiertos (OPEN)", open_u)
-            mu2.metric("Bloqueados (LOCKED)", locked_u)
+            mu3.metric("Bloqueados (LOCKED)", locked_u)
             mu4.metric("Expirados (EXPIRED)", expired_u)
 
             st.dataframe(df_users, use_container_width=True, hide_index=True)
